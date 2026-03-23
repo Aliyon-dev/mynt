@@ -12,25 +12,27 @@ model User {
   username       String        @unique
   password       String
   role           String        // 'admin', 'bank', 'student'
-  
+
   // Relations
   studentBankId  String?       // Only for students: assigned bank
   bankIdRelation Bank?         @relation("StudentToBank", fields: [studentBankId], references: [id])
   bankDetails    Bank?         @relation("BankAdminUser") // Only for bank users
   transactions   Transaction[] @relation("StudentTransactions")
+  loans          Loan[]        @relation("StudentLoans")
   accessLogs     AccessLog[]
 }
 
 model Bank {
-  id         String        @id @default(uuid())
-  name       String        @unique
-  
+  id           String        @id @default(uuid())
+  name         String        @unique
+
   // A bank has essentially a single bank user admin for demonstration
-  userId     String?       @unique
-  user       User?         @relation("BankAdminUser", fields: [userId], references: [id])
-  
-  students   User[]        @relation("StudentToBank")
+  userId       String?       @unique
+  user         User?         @relation("BankAdminUser", fields: [userId], references: [id])
+
+  students     User[]        @relation("StudentToBank")
   transactions Transaction[]
+  loans        Loan[]
 }
 
 model Transaction {
@@ -38,12 +40,26 @@ model Transaction {
   type      String   // 'loan', 'allowance'
   amount    Float
   date      DateTime @default(now())
-  
+
   studentId String
   student   User     @relation("StudentTransactions", fields: [studentId], references: [id])
-  
+
   bankId    String
   bank      Bank     @relation(fields: [bankId], references: [id])
+}
+
+model Loan {
+  id          String   @id @default(uuid())
+  amount      Float
+  status      String   @default("Pending") // Pending | Approved | Rejected | Disbursed
+  description String?
+  createdAt   DateTime @default(now())
+
+  studentId   String
+  student     User     @relation("StudentLoans", fields: [studentId], references: [id])
+
+  bankId      String
+  bank        Bank     @relation(fields: [bankId], references: [id])
 }
 
 model AccessLog {
@@ -52,7 +68,7 @@ model AccessLog {
   targetId  String
   status    String   // 'Allowed', 'Blocked'
   timestamp DateTime @default(now())
-  
+
   userId    String
   user      User     @relation(fields: [userId], references: [id])
 }

@@ -25,7 +25,7 @@ export default function Login() {
       } else if (result?.redirect) {
         router.push(result.redirect);
       }
-    } catch (err: any) {
+    } catch {
       setError("An unexpected error occurred");
       setLoading(false);
     }
@@ -82,9 +82,9 @@ export default function Login() {
         
         <div style={{ textAlign: "center", marginTop: "2.5rem", color: "#94a3b8", fontSize: "0.8rem", lineHeight: "1.6" }}>
           Demo Credentials:<br />
-          Admin: absa_admin | password123<br />
-          Bank: absa | password123<br />
-          Student: student1 | password123
+          Admin: uni_admin | admin<br />
+          Bank: zanaco_admin | password<br />
+          Student: Alice | student_password
         </div>
       </div>
     </div>

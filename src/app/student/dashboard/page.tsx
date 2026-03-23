@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { logout } from "@/actions";
@@ -26,31 +28,25 @@ export default function StudentDashboard() {
     loadData();
   }, [router]);
 
-  if (loading)
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        Loading...
-      </div>
-    );
+  if (loading) return <div className="page-shell centered">Loading...</div>;
 
   return (
-    <div>
+    <div className="page-shell">
       <header className="app-header">
         <div className="container header-content">
           <div className="logo">
             <div className="logo-icon">$</div>
             Mynt Financial
           </div>
-          <div className="flex items-center gap-4">
-            <div className="badge badge-success">Student Session</div>
-            <span style={{ fontWeight: 600 }}>{data?.username}</span>
+          <div className="session-area">
+            <span className="badge badge-success">Student</span>
+            <strong>{data?.username}</strong>
             <button
               onClick={async () => {
                 const res = await logout();
                 if (res?.redirect) router.push(res.redirect);
               }}
               className="btn btn-secondary"
-              style={{ padding: "0.5rem 1rem", fontSize: "0.875rem" }}
             >
               Logout
             </button>
@@ -58,42 +54,54 @@ export default function StudentDashboard() {
         </div>
       </header>
 
-      <main className="main-content container mt-8">
-        <h1 className="text-gradient mb-8" style={{ fontSize: "2.5rem" }}>
-          Student Portal
-        </h1>
+      <main className="container main-content">
+        <h1 className="heading-xl">Student Loan Portal</h1>
+        <p className="subtitle">Track your assigned bank and loan status in real time.</p>
 
-        {error && <div className="badge badge-error mb-6">{error}</div>}
+        {error && <div className="badge badge-error block-message">{error}</div>}
 
-        <div className="glass-card mb-8">
-          <h2 className="mb-2 border-b pb-2" style={{ borderColor: "var(--glass-border)", fontSize: "1.25rem" }}>
-            Your Assigned Bank
-          </h2>
-          <p style={{ color: "#64748b", marginBottom: "2rem", maxWidth: "600px", fontSize: "0.9rem" }}>
-            Per the university Chinese Wall policy, your financial records are
-            maintained exclusively by this bank and are completely isolated from
-            other banks.
-          </p>
+        <section className="dashboard-grid top-metrics">
+          <div className="metric-card"><p>Assigned Bank</p><h3>{data?.bankIdRelation?.name || "Pending"}</h3></div>
+          <div className="metric-card"><p>Total Loans</p><h3>{data?.loans?.length || 0}</h3></div>
+          <div className="metric-card"><p>Approved Loans</p><h3>{data?.loans?.filter((loan: any) => loan.status === "Approved").length || 0}</h3></div>
+        </section>
 
-          <div
-            className="glass-panel"
-            style={{ display: "inline-block", padding: "1.5rem 2rem" }}
-          >
-            <span style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
-              {data?.bankIdRelation?.name || "Unassigned"} Bank
-            </span>
+        <section className="dashboard-grid two-col">
+          <div className="glass-card">
+            <h2>Loan status</h2>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Bank</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data?.loans?.length ? (
+                    data.loans.map((loan: any) => (
+                      <tr key={loan.id}>
+                        <td>{new Date(loan.createdAt).toLocaleDateString()}</td>
+                        <td>{loan.bank.name}</td>
+                        <td>${loan.amount.toFixed(2)}</td>
+                        <td>{loan.status}</td>
+                        <td>{loan.description || "-"}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={5}>No loans yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
 
-        <div className="glass-card mb-8">
-          <h2 className="mb-6 border-b pb-2" style={{ borderColor: "var(--glass-border)", fontSize: "1.25rem" }}>
-            Your Transaction History
-          </h2>
-
-          {data?.transactions?.length === 0 ? (
-            <p style={{ color: "#64748b", fontSize: "0.9rem" }}>No transactions recorded.</p>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
+          <div className="glass-card">
+            <h2>Transaction history</h2>
+            <div className="table-wrap">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -104,21 +112,23 @@ export default function StudentDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data?.transactions.map((tx: any) => (
-                    <tr key={tx.id}>
-                      <td>{new Date(tx.date).toLocaleDateString()}</td>
-                      <td style={{ textTransform: "capitalize" }}>{tx.type}</td>
-                      <td>{tx.bank.name}</td>
-                      <td style={{ color: "#34d399", fontWeight: "bold" }}>
-                        ${tx.amount.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
+                  {data?.transactions?.length ? (
+                    data.transactions.map((tx: any) => (
+                      <tr key={tx.id}>
+                        <td>{new Date(tx.date).toLocaleDateString()}</td>
+                        <td>{tx.type}</td>
+                        <td>{tx.bank.name}</td>
+                        <td>${tx.amount.toFixed(2)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={4}>No transactions recorded.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+          </div>
+        </section>
       </main>
     </div>
   );
