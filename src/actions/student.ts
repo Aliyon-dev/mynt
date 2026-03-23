@@ -9,16 +9,18 @@ export async function getStudentDashboardData() {
     throw new Error('Unauthorized');
   }
 
-  const studentWithBank = await prisma.user.findUnique({
+  return prisma.user.findUnique({
     where: { id: currentUser.id },
     include: {
       bankIdRelation: true,
       transactions: {
         include: { bank: true },
         orderBy: { date: 'desc' },
-      }
-    }
+      },
+      loans: {
+        include: { bank: true },
+        orderBy: { createdAt: 'desc' },
+      },
+    },
   });
-
-  return studentWithBank;
 }

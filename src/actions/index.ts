@@ -14,12 +14,11 @@ export async function login(username: string, password: string) {
   }
 
   await setSession(user.id);
-  
-  // Return the redirect path
+
   if (user.role === 'admin') return { redirect: '/admin/dashboard' };
   if (user.role === 'bank') return { redirect: '/bank/dashboard' };
   if (user.role === 'student') return { redirect: '/student/dashboard' };
-  
+
   return { error: 'Unknown role' };
 }
 
@@ -35,12 +34,18 @@ export async function getBankDashboardData() {
   }
 
   const bankId = currentUser.bankDetails.id;
-  
-  // A bank can only get students assigned to it 
+
   const students = await prisma.user.findMany({
     where: {
       role: 'student',
       studentBankId: bankId,
+    },
+    orderBy: { username: 'asc' },
+    include: {
+      loans: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
     },
   });
 
@@ -51,42 +56,82 @@ export async function getBankDashboardData() {
     take: 10,
   });
 
-  return { bank: currentUser.bankDetails, students, recentTransactions };
+  const recentLoans = await prisma.loan.findMany({
+    where: { bankId },
+    include: { student: true },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  });
+
+  return { bank: currentUser.bankDetails, students, recentTransactions, recentLoans };
 }
 
-/** 
- * Action to process a transaction that invokes the Chinese Wall check
- */
-export async function processTransaction({ studentId, amount, type }: { studentId: string, amount: number, type: 'loan' | 'allowance' }) {
+export async function processTransaction({
+  studentId,
+  amount,
+  type,
+}: {
+  studentId: string;
+  amount: number;
+  type: 'loan' | 'allowance';
+}) {
   const currentUser = await getCurrentUser();
   if (!currentUser || currentUser.role !== 'bank' || !currentUser.bankDetails) {
     return { error: 'Unauthorized' };
   }
 
-  // ENFORCE CHINESE WALL MODEL
   const isAllowed = await checkChineseWallAccess(currentUser.id, studentId, `Process ${type}`);
-  
+
   if (!isAllowed) {
     return { error: 'BLOCKED BY CHINESE WALL: You are not authorized to access this student\'s records.' };
   }
-
-  const bankId = currentUser.bankDetails.id;
 
   const transaction = await prisma.transaction.create({
     data: {
       type,
       amount,
       studentId,
-      bankId,
+      bankId: currentUser.bankDetails.id,
     },
   });
 
   return { success: true, transaction };
 }
 
-/**
- * Endpoint for testing the Chinese Wall by explicitly attempting to access a student regardless of assignment.
- */
+export async function addLoan({
+  studentId,
+  amount,
+  description,
+  status,
+}: {
+  studentId: string;
+  amount: number;
+  description?: string;
+  status?: 'Pending' | 'Approved' | 'Rejected' | 'Disbursed';
+}) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser || currentUser.role !== 'bank' || !currentUser.bankDetails) {
+    return { error: 'Unauthorized' };
+  }
+
+  const isAllowed = await checkChineseWallAccess(currentUser.id, studentId, 'Create Loan');
+  if (!isAllowed) {
+    return { error: 'BLOCKED BY CHINESE WALL: You cannot add loans for students outside your bank partition.' };
+  }
+
+  const loan = await prisma.loan.create({
+    data: {
+      studentId,
+      bankId: currentUser.bankDetails.id,
+      amount,
+      description: description?.trim() || null,
+      status: status || 'Pending',
+    },
+  });
+
+  return { success: true, loan };
+}
+
 export async function testChineseWallAccess(targetStudentId: string) {
   const currentUser = await getCurrentUser();
   if (!currentUser || currentUser.role !== 'bank') {
@@ -97,8 +142,8 @@ export async function testChineseWallAccess(targetStudentId: string) {
   if (!isAllowed) {
     return { error: 'BLOCKED BY CHINESE WALL: Access denied to student data.' };
   }
-  
-  const student = await prisma.user.findUnique({ where: { id: targetStudentId }});
+
+  const student = await prisma.user.findUnique({ where: { id: targetStudentId } });
   return { success: true, data: student?.username };
 }
 
@@ -108,24 +153,28 @@ export async function getAdminDashboardData() {
     throw new Error('Unauthorized');
   }
 
-  const logs = await prisma.accessLog.findMany({
-    include: { user: true },
-    orderBy: { timestamp: 'desc' },
-  });
+  const [logs, students, transactions, banks, loans] = await Promise.all([
+    prisma.accessLog.findMany({
+      include: { user: true },
+      orderBy: { timestamp: 'desc' },
+    }),
+    prisma.user.findMany({
+      where: { role: 'student' },
+      include: { bankIdRelation: true },
+      orderBy: { username: 'asc' },
+    }),
+    prisma.transaction.findMany({
+      include: { student: true, bank: true },
+      orderBy: { date: 'desc' },
+    }),
+    prisma.bank.findMany({ orderBy: { name: 'asc' } }),
+    prisma.loan.findMany({
+      include: { student: true, bank: true },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
 
-  const students = await prisma.user.findMany({
-    where: { role: 'student' },
-    include: { bankIdRelation: true },
-  });
-  
-  const transactions = await prisma.transaction.findMany({
-    include: { student: true, bank: true },
-    orderBy: { date: 'desc' },
-  });
-
-  const banks = await prisma.bank.findMany();
-
-  return { logs, students, transactions, banks };
+  return { logs, students, transactions, banks, loans };
 }
 
 export async function addBank(formData: FormData) {
@@ -152,19 +201,20 @@ export async function addBank(formData: FormData) {
         username,
         password,
         role: 'bank',
-      }
+      },
     });
 
     await prisma.bank.create({
       data: {
         name: bankName,
-        userId: newUser.id
-      }
+        userId: newUser.id,
+      },
     });
 
     return { success: true };
-  } catch (err: any) {
-    return { error: err.message || 'Failed to create bank' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to create bank';
+    return { error: message };
   }
 }
 
@@ -189,12 +239,42 @@ export async function addStudent(formData: FormData) {
         username,
         password,
         role: 'student',
-        studentBankId: bankId || null
-      }
+        studentBankId: bankId || null,
+      },
     });
 
     return { success: true };
-  } catch (err: any) {
-    return { error: err.message || 'Failed to create student' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to create student';
+    return { error: message };
   }
+}
+
+export async function assignStudentBank(formData: FormData) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser || currentUser.role !== 'admin') {
+    return { error: 'Unauthorized' };
+  }
+
+  const studentId = formData.get('studentId') as string;
+  const bankId = formData.get('bankId') as string;
+
+  if (!studentId || !bankId) {
+    return { error: 'Student and bank are required' };
+  }
+
+  const student = await prisma.user.findFirst({
+    where: { id: studentId, role: 'student' },
+  });
+
+  if (!student) {
+    return { error: 'Student not found' };
+  }
+
+  await prisma.user.update({
+    where: { id: studentId },
+    data: { studentBankId: bankId },
+  });
+
+  return { success: true };
 }

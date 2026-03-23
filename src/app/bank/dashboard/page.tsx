@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  addLoan,
   getBankDashboardData,
   processTransaction,
   testChineseWallAccess,
@@ -15,17 +18,19 @@ export default function BankDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Transaction processing state
   const [selectedStudent, setSelectedStudent] = useState("");
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<"loan" | "allowance">("loan");
   const [txMessage, setTxMessage] = useState({ text: "", type: "" });
 
-  // Chinese Wall Simulation state
+  const [loanMessage, setLoanMessage] = useState({ text: "", type: "" });
+  const [loanAmount, setLoanAmount] = useState("");
+  const [loanDescription, setLoanDescription] = useState("");
+
   const [testStudentId, setTestStudentId] = useState("");
   const [testMessage, setTestMessage] = useState({ text: "", type: "" });
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
       const dashboardData = await getBankDashboardData();
       setData(dashboardData);
@@ -35,11 +40,11 @@ export default function BankDashboard() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [router]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   async function handleTransaction(e: React.FormEvent) {
     e.preventDefault();
@@ -50,83 +55,80 @@ export default function BankDashboard() {
       return;
     }
 
-    try {
-      const res = await processTransaction({
-        studentId: selectedStudent,
-        amount: parseFloat(amount),
-        type,
-      });
+    const res = await processTransaction({
+      studentId: selectedStudent,
+      amount: parseFloat(amount),
+      type,
+    });
 
-      if (res?.error) {
-        setTxMessage({ text: res.error, type: "error" });
-      } else {
-        setTxMessage({
-          text: `Successfully processed ${type} of $${amount}`,
-          type: "success",
-        });
-        setAmount("");
-        loadData(); // Refresh transaction list
-      }
-    } catch (err) {
-      setTxMessage({ text: "Transaction failed", type: "error" });
+    if (res?.error) {
+      setTxMessage({ text: res.error, type: "error" });
+      return;
     }
+
+    setTxMessage({ text: `Successfully processed ${type} of $${amount}`, type: "success" });
+    setAmount("");
+    loadData();
+  }
+
+  async function handleAddLoan(e: React.FormEvent) {
+    e.preventDefault();
+    setLoanMessage({ text: "Saving loan...", type: "info" });
+
+    if (!selectedStudent || !loanAmount) {
+      setLoanMessage({ text: "Select a student and amount", type: "error" });
+      return;
+    }
+
+    const res = await addLoan({
+      studentId: selectedStudent,
+      amount: parseFloat(loanAmount),
+      description: loanDescription,
+      status: "Pending",
+    });
+
+    if (res?.error) {
+      setLoanMessage({ text: res.error, type: "error" });
+      return;
+    }
+
+    setLoanMessage({ text: "Loan added and visible to student", type: "success" });
+    setLoanAmount("");
+    setLoanDescription("");
+    loadData();
   }
 
   async function handleSimulateWall(e: React.FormEvent) {
     e.preventDefault();
-    setTestMessage({ text: "Testing access...", type: "info" });
+    const res = await testChineseWallAccess(testStudentId);
 
-    if (!testStudentId) {
-      setTestMessage({
-        text: "Please enter a Student ID to test",
-        type: "error",
-      });
+    if (res?.error) {
+      setTestMessage({ text: res.error, type: "error" });
       return;
     }
 
-    try {
-      const res = await testChineseWallAccess(testStudentId);
-      if (res?.error) {
-        setTestMessage({ text: res.error, type: "error" });
-      } else {
-        setTestMessage({
-          text: `SUCCESS: Accessed data for Student: ${res.data}`,
-          type: "success",
-        });
-      }
-    } catch (err) {
-      setTestMessage({
-        text: "Test failed due to an unexpected error",
-        type: "error",
-      });
-    }
+    setTestMessage({ text: `SUCCESS: Accessed ${res.data}`, type: "success" });
   }
 
-  if (loading)
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        Loading...
-      </div>
-    );
+  if (loading) return <div className="page-shell centered">Loading...</div>;
 
   return (
-    <div>
+    <div className="page-shell">
       <header className="app-header">
         <div className="container header-content">
           <div className="logo">
             <div className="logo-icon">$</div>
             Mynt Financial
           </div>
-          <div className="flex items-center gap-4">
-            <div className="badge badge-success">Bank Session</div>
-            <span style={{ fontWeight: 600 }}>{data?.bank?.name} Bank</span>
+          <div className="session-area">
+            <span className="badge badge-success">Bank</span>
+            <strong>{data?.bank?.name}</strong>
             <button
               onClick={async () => {
                 const res = await logout();
                 if (res?.redirect) router.push(res.redirect);
               }}
               className="btn btn-secondary"
-              style={{ padding: "0.5rem 1rem", fontSize: "0.875rem" }}
             >
               Logout
             </button>
@@ -134,277 +136,130 @@ export default function BankDashboard() {
         </div>
       </header>
 
-      <main className="main-content container mt-8">
-        <h1 className="text-gradient mb-8" style={{ fontSize: "2.5rem" }}>
-          Bank Dashboard
-        </h1>
+      <main className="container main-content">
+        <h1 className="heading-xl">Bank Operations Dashboard</h1>
+        <p className="subtitle">View your assigned students, issue loans, and validate Chinese Wall boundaries.</p>
 
-        {error && <div className="badge badge-error mb-6">{error}</div>}
+        {error && <div className="badge badge-error block-message">{error}</div>}
 
-        <div
-          className="flex gap-6 flex-col lg:flex-row"
-          style={{ flexDirection: "row" }}
-        >
-          {/* Left Column */}
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: "1.5rem",
-            }}
-          >
-            <div
-              className="glass-card animate-fade-in"
-              style={{ padding: "2rem" }}
-            >
-              <h2
-                className="mb-6 border-b pb-2"
-                style={{ borderColor: "var(--glass-border)" }}
-              >
-                Your Assigned Students
-              </h2>
-              {data?.students.length === 0 ? (
-                <p style={{ color: "#94a3b8" }}>
-                  No students assigned to this bank.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {data?.students.map((student: any) => (
-                    <div
-                      key={student.id}
-                      className="glass-panel flex justify-between items-center"
-                      style={{ padding: "1rem" }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: "1.1rem" }}>
-                          {student.username}
-                        </div>
-                        <div style={{ color: "#64748b", fontSize: "0.8rem" }}>
-                          ID: {student.id}
-                        </div>
-                      </div>
-                      <div className="badge badge-success">Assigned</div>
-                    </div>
+        <section className="dashboard-grid top-metrics">
+          <div className="metric-card"><p>Assigned Students</p><h3>{data?.students?.length || 0}</h3></div>
+          <div className="metric-card"><p>Recent Loans</p><h3>{data?.recentLoans?.length || 0}</h3></div>
+          <div className="metric-card"><p>Transactions</p><h3>{data?.recentTransactions?.length || 0}</h3></div>
+        </section>
+
+        <section className="dashboard-grid two-col">
+          <div className="glass-card">
+            <h2>Students under this bank</h2>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>ID</th>
+                    <th>Latest Loan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data?.students?.map((student: any) => (
+                    <tr key={student.id}>
+                      <td>{student.username}</td>
+                      <td className="mono-cell">{student.id.slice(0, 10)}...</td>
+                      <td>{student.loans?.[0]?.status || "No loans"}</td>
+                    </tr>
                   ))}
-                </div>
-              )}
+                </tbody>
+              </table>
             </div>
+          </div>
 
-            <div
-              className="glass-card animate-fade-in"
-              style={{ padding: "2rem", animationDelay: "0.1s" }}
-            >
-              <h2
-                className="mb-6 border-b pb-2"
-                style={{ borderColor: "var(--glass-border)" }}
-              >
-                Process Transaction
-              </h2>
+          <div className="glass-card">
+            <h2>Create Loan</h2>
+            {loanMessage.text && (
+              <div className={`badge block-message ${loanMessage.type === "error" ? "badge-error" : loanMessage.type === "success" ? "badge-success" : "badge-warning"}`}>
+                {loanMessage.text}
+              </div>
+            )}
+            <form onSubmit={handleAddLoan}>
+              <div className="form-group">
+                <label className="form-label">Student</label>
+                <select className="form-select" value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} required>
+                  <option value="">Choose student</option>
+                  {data?.students?.map((student: any) => (
+                    <option key={student.id} value={student.id}>{student.username}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Loan Amount</label>
+                <input type="number" min="1" step="0.01" className="form-input" value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Description</label>
+                <input className="form-input" value={loanDescription} onChange={(e) => setLoanDescription(e.target.value)} placeholder="Tuition support" />
+              </div>
+              <button className="btn btn-primary full-width" type="submit">Add Loan</button>
+            </form>
+          </div>
+        </section>
 
-              {txMessage.text && (
-                <div
-                  className={`badge mb-4 ${txMessage.type === "error" ? "badge-error" : txMessage.type === "success" ? "badge-success" : "badge-warning"}`}
-                  style={{
-                    width: "100%",
-                    padding: "1rem",
-                    whiteSpace: "normal",
-                    textAlign: "center",
-                  }}
-                >
-                  {txMessage.text}
-                </div>
-              )}
-
-              <form onSubmit={handleTransaction}>
+        <section className="dashboard-grid two-col">
+          <div className="glass-card">
+            <h2>Process Transaction</h2>
+            {txMessage.text && (
+              <div className={`badge block-message ${txMessage.type === "error" ? "badge-error" : txMessage.type === "success" ? "badge-success" : "badge-warning"}`}>
+                {txMessage.text}
+              </div>
+            )}
+            <form onSubmit={handleTransaction}>
+              <div className="form-group">
+                <label className="form-label">Student</label>
+                <select className="form-select" value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} required>
+                  <option value="">Choose student</option>
+                  {data?.students?.map((student: any) => (
+                    <option key={student.id} value={student.id}>{student.username}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Select Student</label>
-                  <select
-                    className="form-select"
-                    value={selectedStudent}
-                    onChange={(e) => setSelectedStudent(e.target.value)}
-                    required
-                  >
-                    <option value="">-- Choose a student --</option>
-                    {data?.students.map((student: any) => (
-                      <option key={student.id} value={student.id}>
-                        {student.username} ({student.id.substring(0, 8)}...)
-                      </option>
-                    ))}
+                  <label className="form-label">Type</label>
+                  <select className="form-select" value={type} onChange={(e) => setType(e.target.value as "loan" | "allowance")}>
+                    <option value="loan">Loan Transfer</option>
+                    <option value="allowance">Allowance</option>
                   </select>
                 </div>
-
-                <div
-                  className="flex gap-4 mb-6"
-                  style={{ flexDirection: "row" }}
-                >
-                  <div
-                    className="form-group"
-                    style={{ flex: 1, marginBottom: 0 }}
-                  >
-                    <label className="form-label">Type</label>
-                    <select
-                      className="form-select"
-                      value={type}
-                      onChange={(e) => setType(e.target.value as any)}
-                    >
-                      <option value="loan">Student Loan</option>
-                      <option value="allowance">Monthly Allowance</option>
-                    </select>
-                  </div>
-                  <div
-                    className="form-group"
-                    style={{ flex: 1, marginBottom: 0 }}
-                  >
-                    <label className="form-label">Amount ($)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      step="0.01"
-                      className="form-input"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="e.g. 500.00"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ width: "100%" }}
-                >
-                  Process Secure Transaction
-                </button>
-              </form>
-            </div>
-          </div>
-
-          {/* Right Column */}
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: "1.5rem",
-            }}
-          >
-            <div
-              className="glass-card animate-fade-in"
-              style={{
-                padding: "2rem",
-                border: "1px solid rgba(239, 68, 68, 0.3)",
-                animationDelay: "0.2s",
-              }}
-            >
-              <h2
-                className="mb-2"
-                style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-              >
-                <span style={{ color: "#ef4444" }}>⚠️</span>
-                Test Chinese Wall Constraint
-              </h2>
-              <p
-                style={{
-                  color: "#64748b",
-                  fontSize: "0.9rem",
-                  marginBottom: "1.5rem",
-                }}
-              >
-                Attempt to access a student's data using their explicit ID. If
-                they are assigned to another bank, the Chinese Wall policy will
-                block the request and log an access violation.
-              </p>
-
-              {testMessage.text && (
-                <div
-                  className={`badge mb-4 ${testMessage.type === "error" ? "badge-error" : testMessage.type === "success" ? "badge-success" : "badge-warning"}`}
-                  style={{
-                    width: "100%",
-                    padding: "1rem",
-                    whiteSpace: "normal",
-                    textAlign: "center",
-                  }}
-                >
-                  {testMessage.text}
-                </div>
-              )}
-
-              <form onSubmit={handleSimulateWall}>
                 <div className="form-group">
-                  <label className="form-label">Student ID (UUID)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={testStudentId}
-                    onChange={(e) => setTestStudentId(e.target.value)}
-                    placeholder="Enter Student ID to attempt access..."
-                    required
-                  />
+                  <label className="form-label">Amount</label>
+                  <input type="number" min="1" step="0.01" className="form-input" value={amount} onChange={(e) => setAmount(e.target.value)} required />
                 </div>
-                <button
-                  type="submit"
-                  className="btn btn-secondary"
-                  style={{
-                    width: "100%",
-                    color: "#ef4444",
-                    borderColor: "rgba(239, 68, 68, 0.3)",
-                  }}
-                >
-                  Force Access Attempt
-                </button>
-              </form>
-            </div>
-
-            <div
-              className="glass-card animate-fade-in"
-              style={{ padding: "2rem", animationDelay: "0.3s" }}
-            >
-              <h2
-                className="mb-6 border-b pb-2"
-                style={{ borderColor: "var(--glass-border)" }}
-              >
-                Recent Transactions
-              </h2>
-
-              {data?.recentTransactions.length === 0 ? (
-                <p style={{ color: "#64748b" }}>No transactions recorded.</p>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {data?.recentTransactions.map((tx: any) => (
-                    <div
-                      key={tx.id}
-                      className="glass-panel"
-                      style={{
-                        padding: "1rem",
-                        background: "rgba(0,0,0,0.02)",
-                      }}
-                    >
-                      <div className="flex justify-between mb-2">
-                        <span style={{ fontWeight: 600 }}>
-                          {tx.student.username}
-                        </span>
-                        <span style={{ color: "#34d399", fontWeight: "bold" }}>
-                          ${tx.amount.toFixed(2)}
-                        </span>
-                      </div>
-                      <div
-                        className="flex justify-between"
-                        style={{ fontSize: "0.8rem", color: "#64748b" }}
-                      >
-                        <span style={{ textTransform: "capitalize" }}>
-                          {tx.type}
-                        </span>
-                        <span>{new Date(tx.date).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+              </div>
+              <button type="submit" className="btn btn-primary full-width">Process Transaction</button>
+            </form>
           </div>
-        </div>
+
+          <div className="glass-card danger-card">
+            <h2>Chinese Wall Test</h2>
+            {testMessage.text && (
+              <div className={`badge block-message ${testMessage.type === "error" ? "badge-error" : "badge-success"}`}>
+                {testMessage.text}
+              </div>
+            )}
+            <form onSubmit={handleSimulateWall}>
+              <div className="form-group">
+                <label className="form-label">Student ID to force-check</label>
+                <input className="form-input" value={testStudentId} onChange={(e) => setTestStudentId(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn btn-secondary full-width">Run Wall Test</button>
+            </form>
+            <h3 className="panel-heading">Recent loans</h3>
+            <ul className="clean-list">
+              {data?.recentLoans?.map((loan: any) => (
+                <li key={loan.id}>{loan.student.username} — ${loan.amount.toFixed(2)} ({loan.status})</li>
+              ))}
+            </ul>
+          </div>
+        </section>
       </main>
     </div>
   );
