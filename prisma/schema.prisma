@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id             String        @id @default(uuid())
+  username       String        @unique
+  password       String
+  role           String        // 'admin', 'bank', 'student'
+  
+  // Relations
+  studentBankId  String?       // Only for students: assigned bank
+  bankIdRelation Bank?         @relation("StudentToBank", fields: [studentBankId], references: [id])
+  bankDetails    Bank?         @relation("BankAdminUser") // Only for bank users
+  transactions   Transaction[] @relation("StudentTransactions")
+  accessLogs     AccessLog[]
+}
+
+model Bank {
+  id         String        @id @default(uuid())
+  name       String        @unique
+  
+  // A bank has essentially a single bank user admin for demonstration
+  userId     String?       @unique
+  user       User?         @relation("BankAdminUser", fields: [userId], references: [id])
+  
+  students   User[]        @relation("StudentToBank")
+  transactions Transaction[]
+}
+
+model Transaction {
+  id        String   @id @default(uuid())
+  type      String   // 'loan', 'allowance'
+  amount    Float
+  date      DateTime @default(now())
+  
+  studentId String
+  student   User     @relation("StudentTransactions", fields: [studentId], references: [id])
+  
+  bankId    String
+  bank      Bank     @relation(fields: [bankId], references: [id])
+}
+
+model AccessLog {
+  id        String   @id @default(uuid())
+  action    String
+  targetId  String
+  status    String   // 'Allowed', 'Blocked'
+  timestamp DateTime @default(now())
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
