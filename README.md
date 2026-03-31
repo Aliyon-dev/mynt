@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mynt Financial
+
+Mynt Financial is a role-based banking and student loan management platform built with Next.js. It features a robust permission system and administrative tools to manage banking entities, students, and financial transactions. A key focus is on compliance and data partition through a "Chinese Wall" access control mechanism.
+
+## Features
+
+### Role-Based Access Control
+
+The application supports three distinct user roles, each with its own dashboard and permissions:
+
+1. **Administrator (`admin`)**
+   - **Bank Management:** Create and manage banking entities.
+   - **Student Management:** Register students and assign them to specific banks.
+   - **Audit Logs:** View system-wide access logs, tracking actions and access control events.
+   - **Overview:** Monitor total students, active loans, and transaction volumes across the entire platform.
+
+2. **Bank / Financial Institution (`bank`)**
+   - **Student Oversight:** View students specifically assigned to the bank.
+   - **Loan Processing:** Issue loans and track their statuses (Pending, Approved, Rejected, Disbursed).
+   - **Transaction Handling:** Process financial transactions such as loan disbursements and allowance payments.
+   - **Compliance Testing:** Tools to verify the "Chinese Wall" to ensure banks cannot access data of students outside their purview.
+
+3. **Student (`student`)**
+   - **Financial Dashboard:** Track assigned bank and overall loan status.
+   - **Loan History:** View details of all active and past loans.
+   - **Transaction Records:** Monitor incoming transfers and allowance payouts.
+
+### Security & Compliance ("Chinese Wall")
+
+The platform implements a strict data boundary protocol referred to as the "Chinese Wall". Bank accounts are strictly partitioned; a bank administrator can only view profiles, process loans, and handle transactions for students explicitly assigned to their institution.
+
+## Tech Stack
+
+- **Framework:** Next.js (React 19)
+- **Styling:** Tailwind CSS
+- **Database ORM:** Prisma
+- **Database:** SQLite (for local development)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Node.js (v18+)
+- npm or yarn
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Clone the repository and navigate to the project directory:
+   ```bash
+   cd mynt
+   ```
+2. Install the dependencies:
+   ```bash
+   npm install
+   ```
+3. Initialize the database:
+   ```bash
+   npx prisma db push
+   npx prisma generate
+   ```
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+5. Open your browser and navigate to `http://localhost:3000`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Demo Credentials
 
-## Learn More
+To explore the different roles, you can use the following default demo credentials on the login page:
 
-To learn more about Next.js, take a look at the following resources:
+| Role    | Username       | Password           |
+| ------- | -------------- | ------------------ |
+| Admin   | `uni_admin`    | `admin`            |
+| Bank    | `zanaco_admin` | `password`         |
+| Student | `Alice`        | `student_password` |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+_(Note: Ensure you have populated the database with seed data if logging in for the first time on a fresh database. Depending on your configuration, running `npm run dev` might execute a seed script, or you might need to run `npx prisma db seed`)._
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/app/`: Next.js App Router containing the main views for `/admin`, `/bank`, and `/student`.
+- `src/actions/`: Server actions containing the core business logic, database queries, and role verification.
+- `src/lib/`: Library utilities including the `prisma` client, session management (`session.ts`), and compliance checks (`chineseWall.ts`).
+- `prisma/`: Prisma schema and database configuration.

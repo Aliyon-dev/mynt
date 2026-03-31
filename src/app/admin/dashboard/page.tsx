@@ -4,16 +4,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  getAdminDashboardData,
-  logout,
-  addBank,
-  addStudent,
-  assignStudentBank,
-} from "@/actions";
+import { getAdminDashboardData } from "@/actions";
 
-const tabs = ["overview", "students", "loans", "logs", "registration"] as const;
-type Tab = (typeof tabs)[number];
+import { Sidebar } from "./components/Sidebar";
+import { OverviewTab } from "./components/OverviewTab";
+import { StudentsTab } from "./components/StudentsTab";
+import { LoansTab } from "./components/LoansTab";
+import { LogsTab } from "./components/LogsTab";
+import { BanksTab } from "./components/BanksTab";
+
+type Tab = "overview" | "students" | "loans" | "logs" | "registration";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -62,283 +62,83 @@ export default function AdminDashboard() {
   }
 
   if (loading && !data) {
-    return <div className="page-shell centered">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-50 text-slate-500 font-medium">
+        Loading dashboard...
+      </div>
+    );
   }
 
+  const navigateTab = (tab: Tab) => setActiveTab(tab);
+
   return (
-    <div className="page-shell">
-      <header className="app-header">
-        <div className="container header-content">
-          <div className="logo">
-            <div className="logo-icon">$</div>
+    <div className="flex h-screen bg-[#F8FAFC] overflow-hidden text-slate-800 font-sans">
+      <Sidebar activeTab={activeTab} navigateTab={navigateTab} />
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto w-full">
+        {/* Top Header */}
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
+          <div className="border border-slate-200 bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm">
+            <div className="w-5 h-5 bg-blue-500 rounded text-xs text-white flex items-center justify-center">
+              $
+            </div>
             Mynt Financial
           </div>
-          <div className="session-area">
-            <span className="badge badge-info">Admin</span>
-            <button
-              onClick={async () => {
-                const res = await logout();
-                if (res?.redirect) router.push(res.redirect);
-              }}
-              className="btn btn-secondary"
-            >
-              Logout
-            </button>
+          <button
+            onClick={() => setActiveTab("registration")}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition-colors"
+          >
+            Add Bank/Student
+            <span className="bg-blue-700/50 rounded-full w-5 h-5 flex items-center justify-center text-xs leading-none">
+              +
+            </span>
+          </button>
+        </header>
+
+        {/* Dashboard Content */}
+        <div className="p-8 max-w-7xl mx-auto w-full">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 mb-1">
+              Admin Overview
+            </h1>
+            <p className="text-slate-500 mb-8">
+              Manage banks, students, and monitor compliance activities.
+            </p>
           </div>
+
+          {error && (
+            <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl mb-6 font-medium text-sm flex items-center gap-2 border border-red-100">
+              {error}
+            </div>
+          )}
+
+          {activeTab === "overview" && <OverviewTab data={data} navigateTab={navigateTab} />}
+
+          {activeTab === "students" && (
+            <StudentsTab 
+              data={data}
+              studentRegMsg={studentRegMsg}
+              setStudentRegMsg={setStudentRegMsg}
+              assignMsg={assignMsg}
+              setAssignMsg={setAssignMsg}
+              submitFormAction={submitFormAction}
+            />
+          )}
+
+          {activeTab === "loans" && <LoansTab data={data} />}
+
+          {activeTab === "logs" && <LogsTab data={data} />}
+
+          {activeTab === "registration" && (
+            <BanksTab 
+              data={data}
+              bankRegMsg={bankRegMsg}
+              setBankRegMsg={setBankRegMsg}
+              submitFormAction={submitFormAction}
+            />
+          )}
         </div>
-      </header>
-
-      <main className="container main-content">
-        <h1 className="heading-xl">Chinese Wall Control Center</h1>
-        <p className="subtitle">Manage banks, students, assignments, and security audit trails.</p>
-
-        {error && <div className="badge badge-error block-message">{error}</div>}
-
-        <section className="dashboard-grid top-metrics">
-          <div className="metric-card">
-            <p>Total Banks</p>
-            <h3>{data?.banks?.length || 0}</h3>
-          </div>
-          <div className="metric-card">
-            <p>Total Students</p>
-            <h3>{data?.students?.length || 0}</h3>
-          </div>
-          <div className="metric-card">
-            <p>Loans Issued</p>
-            <h3>{data?.loans?.length || 0}</h3>
-          </div>
-          <div className="metric-card">
-            <p>Policy Violations</p>
-            <h3>{data?.logs?.filter((log: any) => log.status === "Blocked").length || 0}</h3>
-          </div>
-        </section>
-
-        <div className="tab-row">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              className={`tab-btn ${activeTab === tab ? "active" : ""}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === "overview" && (
-          <section className="glass-card">
-            <h2>Assignments at a glance</h2>
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Assigned Bank</th>
-                    <th>Total Loans</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data?.students?.map((student: any) => (
-                    <tr key={student.id}>
-                      <td>{student.username}</td>
-                      <td>{student.bankIdRelation?.name || "Unassigned"}</td>
-                      <td>{data?.loans?.filter((loan: any) => loan.studentId === student.id).length || 0}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        {activeTab === "students" && (
-          <section className="dashboard-grid two-col">
-            <div className="glass-card">
-              <h2>Students</h2>
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>ID</th>
-                      <th>Bank</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data?.students?.map((student: any) => (
-                      <tr key={student.id}>
-                        <td>{student.username}</td>
-                        <td className="mono-cell">{student.id.slice(0, 10)}...</td>
-                        <td>{student.bankIdRelation?.name || "Unassigned"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="glass-card">
-              <h2>Assign Student to Bank</h2>
-              {assignMsg && (
-                <div className={`badge block-message ${assignMsg.startsWith("Error") ? "badge-error" : "badge-success"}`}>
-                  {assignMsg}
-                </div>
-              )}
-              <form onSubmit={(e) => submitFormAction(e, assignStudentBank, setAssignMsg)}>
-                <div className="form-group">
-                  <label className="form-label">Student</label>
-                  <select name="studentId" className="form-select" required>
-                    <option value="">Choose student</option>
-                    {data?.students?.map((student: any) => (
-                      <option key={student.id} value={student.id}>
-                        {student.username}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Bank</label>
-                  <select name="bankId" className="form-select" required>
-                    <option value="">Choose bank</option>
-                    {data?.banks?.map((bank: any) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button type="submit" className="btn btn-primary full-width">
-                  Assign
-                </button>
-              </form>
-            </div>
-          </section>
-        )}
-
-        {activeTab === "loans" && (
-          <section className="glass-card">
-            <h2>All loans in system</h2>
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Created</th>
-                    <th>Student</th>
-                    <th>Bank</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data?.loans?.map((loan: any) => (
-                    <tr key={loan.id}>
-                      <td>{new Date(loan.createdAt).toLocaleDateString()}</td>
-                      <td>{loan.student.username}</td>
-                      <td>{loan.bank.name}</td>
-                      <td>${loan.amount.toFixed(2)}</td>
-                      <td>{loan.status}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        {activeTab === "logs" && (
-          <section className="glass-card">
-            <h2>Chinese Wall audit logs</h2>
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>User</th>
-                    <th>Action</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data?.logs?.map((log: any) => (
-                    <tr key={log.id}>
-                      <td>{new Date(log.timestamp).toLocaleString()}</td>
-                      <td>{log.user.username}</td>
-                      <td>{log.action}</td>
-                      <td>
-                        <span className={`badge ${log.status === "Allowed" ? "badge-success" : "badge-error"}`}>
-                          {log.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        {activeTab === "registration" && (
-          <section className="dashboard-grid two-col">
-            <div className="glass-card">
-              <h2>Create bank</h2>
-              {bankRegMsg && (
-                <div className={`badge block-message ${bankRegMsg.startsWith("Error") ? "badge-error" : "badge-success"}`}>
-                  {bankRegMsg}
-                </div>
-              )}
-              <form onSubmit={(e) => submitFormAction(e, addBank, setBankRegMsg)}>
-                <div className="form-group">
-                  <label className="form-label">Bank name</label>
-                  <input name="bankName" className="form-input" required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Bank admin username</label>
-                  <input name="username" className="form-input" required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Password</label>
-                  <input type="password" name="password" className="form-input" required />
-                </div>
-                <button type="submit" className="btn btn-primary full-width">
-                  Create bank
-                </button>
-              </form>
-            </div>
-
-            <div className="glass-card">
-              <h2>Create student</h2>
-              {studentRegMsg && (
-                <div className={`badge block-message ${studentRegMsg.startsWith("Error") ? "badge-error" : "badge-success"}`}>
-                  {studentRegMsg}
-                </div>
-              )}
-              <form onSubmit={(e) => submitFormAction(e, addStudent, setStudentRegMsg)}>
-                <div className="form-group">
-                  <label className="form-label">Student username</label>
-                  <input name="username" className="form-input" required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Password</label>
-                  <input type="password" name="password" className="form-input" required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Assign bank</label>
-                  <select name="bankId" className="form-select" required>
-                    <option value="">Choose bank</option>
-                    {data?.banks?.map((bank: any) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button type="submit" className="btn btn-primary full-width">
-                  Create student
-                </button>
-              </form>
-            </div>
-          </section>
-        )}
       </main>
     </div>
   );
